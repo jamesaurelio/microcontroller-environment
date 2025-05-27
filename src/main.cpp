@@ -3,6 +3,9 @@
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include <DHT_U.h>
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>  // For JSON formatting
 
 #define DHTPIN 4           // Digital pin for DHT11
 #define DHTTYPE DHT11
@@ -11,8 +14,22 @@
 DHT dht(DHTPIN, DHTTYPE);
 BH1750 lightMeter;
 
+
+const char* ssid = "james";
+const char* password = "abcdefghijae";
+
+const char* serverUrl = "http://192.168.143.199:8081/api/formdata";
+
 void setup() {
   Serial.begin(115200);
+  WiFi.begin(ssid, password);
+   Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("Connected");
+
 
   // Initialize I2C and BH1750
   Wire.begin();
@@ -27,6 +44,9 @@ void setup() {
 
   // MQ135 (no special init needed for analog read)
   pinMode(MQ135_PIN, INPUT);
+
+  // Wait for WiFi connection
+  
 }
 
 void loop() {
@@ -48,6 +68,34 @@ void loop() {
   float lux = lightMeter.readLightLevel();
   Serial.printf("Light: %.1f lx\n", lux);
 
+  StaticJsonDocument<200> doc;
+  doc["temperature"] = temperature;
+  doc["humidity"] = humidity;
+  doc["co2"] = mq135_raw;
+  doc["light"] = lux;
+
+  String jsonStr;
+  serializeJson(doc, jsonStr);
+
+  if(WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(serverUrl);
+    http.addHeader("Content-Type", "application/json");
+    int httpResponseCode = http.POST(jsonStr);
+    if(httpResponseCode > 0) {
+      String response = http.getString();
+      Serial.println("POST Response: " + response);
+    } else {
+      Serial.println("Error on sending POST: " + String(httpResponseCode));
+    }
+    http.end();
+  } else {
+    Serial.println("WiFi Disconnected");
+  }
+
+  // Print the JSON string to Serial
+  Serial.println("JSON Data:");
+  Serial.println(jsonStr);
   Serial.println("--------------------------");
   delay(5000);
 }
