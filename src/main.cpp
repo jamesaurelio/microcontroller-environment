@@ -18,7 +18,7 @@ BH1750 lightMeter;
 const char* ssid = "james";
 const char* password = "abcdefghijae";
 
-const char* serverUrl = "http://192.168.143.199:8081/api/formdata";
+const char* serverUrl = "http://192.168.143.199:8081/api/sensorData";
 
 void setup() {
   Serial.begin(115200);
@@ -44,9 +44,6 @@ void setup() {
 
   // MQ135 (no special init needed for analog read)
   pinMode(MQ135_PIN, INPUT);
-
-  // Wait for WiFi connection
-  
 }
 
 void loop() {
@@ -98,8 +95,4 @@ void loop() {
   Serial.println(jsonStr);
   Serial.println("--------------------------");
   delay(5000);
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> 11f97ceb4d4281f31c1354ec8a9e573e54d55a83
