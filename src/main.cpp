@@ -49,5 +49,5 @@ void loop() {
   Serial.printf("Light: %.1f lx\n", lux);
 
   Serial.println("--------------------------");
-  delay(2000);
+  delay(5000);
 }
