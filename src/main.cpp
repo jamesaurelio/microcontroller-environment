@@ -98,4 +98,8 @@ void loop() {
   Serial.println(jsonStr);
   Serial.println("--------------------------");
   delay(5000);
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 11f97ceb4d4281f31c1354ec8a9e573e54d55a83
