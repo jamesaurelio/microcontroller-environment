@@ -17,7 +17,7 @@ BH1750 lightMeter;
 const char* ssid = "james";
 const char* password = "abcdefghijae";
 
-const char* serverDataUrl = "http://192.168.143.199:8081/api/formdata";
+const char* serverUrl = "http://192.168.143.199:8081/api/sensorData";
 const char* serverControlUrl = "http://192.168.143.199:8081/api/control";
 
 void setup() {
@@ -81,7 +81,7 @@ void loop() {
 
         // Send data
         HTTPClient postHttp;
-        postHttp.begin(serverDataUrl);
+        postHttp.begin(serverUrl);
         postHttp.addHeader("Content-Type", "application/json");
 
         int postResponse = postHttp.POST(jsonStr);
