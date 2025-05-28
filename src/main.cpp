@@ -52,6 +52,15 @@ float dLightdt(float L, float t) {
   return 0.01 * (50000 - L);
 }
 
+// 📌 Runge-Kutta 4th Order Step Function
+float rk4_step(float (*f)(float, float), float y, float t, float h) {
+  float k1 = h * f(y, t);
+  float k2 = h * f(y + 0.5 * k1, t + 0.5 * h);
+  float k3 = h * f(y + 0.5 * k2, t + 0.5 * h);
+  float k4 = h * f(y + k3, t + h);
+  return (k1 + 2 * k2 + 2 * k3 + k4) / 6.0;
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -173,11 +182,3 @@ void loop() {
   delay(5000);
 }
 
-// 📌 Runge-Kutta 4th Order Step Function
-float rk4_step(float (*f)(float, float), float y, float t, float h) {
-  float k1 = h * f(y, t);
-  float k2 = h * f(y + 0.5 * k1, t + 0.5 * h);
-  float k3 = h * f(y + 0.5 * k2, t + 0.5 * h);
-  float k4 = h * f(y + k3, t + h);
-  return (k1 + 2 * k2 + 2 * k3 + k4) / 6.0;
-}
