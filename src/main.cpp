@@ -35,6 +35,24 @@ float T_sim = 25.0, H_sim = 50.0, C_sim = 300.0, L_sim = 1000.0;
 // RK4 Simulation Values
 float T_rk4 = 25.0, H_rk4 = 50.0, C_rk4 = 300.0, L_rk4 = 1000.0;
 
+// Anomaly detection state
+bool prevTempAnomaly = false;
+bool prevHumAnomaly = false;
+bool prevCO2Anomaly = false;
+bool prevLuxAnomaly = false;
+
+// Basic stats for anomaly detection
+float tempMean = 25.0, tempStd = 1.0;
+float humMean = 50.0, humStd = 5.0;
+float co2Mean = 300.0, co2Std = 20.0;
+float luxMean = 1000.0, luxStd = 300.0;
+
+bool isAnomaly(float value, float mean, float std) {
+  float z = abs((value - mean) / std);
+  return z > 3.0;
+}
+
+
 // Differential equations
 float external_factor(float t) {
   return t >= 2.0 ? 1.0 : 0.0;
@@ -116,6 +134,33 @@ void loop() {
           prevHum = humidity;
           prevCO2 = mq135_smooth;
           prevLux = lux_smooth;
+
+        // Detect anomalies
+        bool tempAnomaly = isAnomaly(temperature, tempMean, tempStd);
+        bool humAnomaly = isAnomaly(humidity, humMean, humStd);
+        bool co2Anomaly = isAnomaly(mq135_smooth, co2Mean, co2Std);
+        bool luxAnomaly = isAnomaly(lux_smooth, luxMean, luxStd);
+
+        // Print alert ONLY when anomaly status changes from false to true
+        if (tempAnomaly && !prevTempAnomaly) {
+          Serial.println("⚠️ Temperature anomaly detected!");
+        }
+        if (humAnomaly && !prevHumAnomaly) {
+          Serial.println("⚠️ Humidity anomaly detected!");
+        }
+        if (co2Anomaly && !prevCO2Anomaly) {
+          Serial.println("⚠️ CO2 anomaly detected!");
+        }
+        if (luxAnomaly && !prevLuxAnomaly) {
+          Serial.println("⚠️ Light anomaly detected!");
+        }
+
+        // Update previous states
+        prevTempAnomaly = tempAnomaly;
+        prevHumAnomaly = humAnomaly;
+        prevCO2Anomaly = co2Anomaly;
+        prevLuxAnomaly = luxAnomaly;
+
 
           Serial.printf("Smoothed Temp: %.1f °C, Smoothed Humidity: %.1f %%\n", temperature, humidity);
 
