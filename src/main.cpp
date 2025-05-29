@@ -208,9 +208,7 @@ void loop() {
             Serial.println("Failed to POST data. Code: " + String(postResponse));
           }
           postHttp.end();
-
-          Serial.println("JSON Data Sent:");
-          Serial.println(jsonStr);
+          
         }
       } else {
         Serial.println("Device is OFF — skipping data send.");
