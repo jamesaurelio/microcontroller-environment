@@ -11,6 +11,12 @@
 #define DHTTYPE DHT11
 #define MQ135_PIN 34
 
+// Relay control pins
+#define RELAY_FAN       14
+#define RELAY_HUMID     26
+#define RELAY_SOLENOID  25
+#define RELAY_LIGHT     33
+
 DHT dht(DHTPIN, DHTTYPE);
 BH1750 lightMeter;
 
@@ -23,8 +29,8 @@ const char* serverControlUrl = "http://192.168.143.199:8081/api/control";
 // Parameters for numerical model
 const float ambient = 25.0;
 const float k = 0.1;
-const float dt = 1.0;  // time step in seconds
-float simTime = 0.0;   // simulation time tracker
+const float dt = 1.0; // time step in seconds
+float simTime = 0.0; // simulation time tracker
 
 // Sensor and smoothed values
 float temperature = 0.0, humidity = 0.0, mq135_raw = 0.0, lux = 0.0;
@@ -52,7 +58,6 @@ bool isAnomaly(float value, float mean, float std) {
   return z > 3.0;
 }
 
-
 // Differential equations
 float external_factor(float t) {
   return t >= 2.0 ? 1.0 : 0.0;
@@ -70,7 +75,7 @@ float dLightdt(float L, float t) {
   return 0.01 * (50000 - L);
 }
 
-// 📌 Runge-Kutta 4th Order Step Function
+// Runge-Kutta 4th Order Step Function
 float rk4_step(float (*f)(float, float), float y, float t, float h) {
   float k1 = h * f(y, t);
   float k2 = h * f(y + 0.5 * k1, t + 0.5 * h);
@@ -91,14 +96,20 @@ void setup() {
   Serial.println(" Connected");
 
   Wire.begin();
-  if (lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE)) {
-    Serial.println("BH1750 ready.");
-  } else {
-    Serial.println("BH1750 not detected.");
-  }
-
+  lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE);
   dht.begin();
   pinMode(MQ135_PIN, INPUT);
+
+  // Relay pin setup
+  pinMode(RELAY_FAN, OUTPUT);
+  pinMode(RELAY_HUMID, OUTPUT);
+  pinMode(RELAY_SOLENOID, OUTPUT);
+  pinMode(RELAY_LIGHT, OUTPUT);
+
+  digitalWrite(RELAY_FAN, LOW);
+  digitalWrite(RELAY_HUMID, LOW);
+  digitalWrite(RELAY_SOLENOID, LOW);
+  digitalWrite(RELAY_LIGHT, LOW);
 }
 
 void loop() {
@@ -135,32 +146,49 @@ void loop() {
           prevCO2 = mq135_smooth;
           prevLux = lux_smooth;
 
-        // Detect anomalies
-        bool tempAnomaly = isAnomaly(temperature, tempMean, tempStd);
-        bool humAnomaly = isAnomaly(humidity, humMean, humStd);
-        bool co2Anomaly = isAnomaly(mq135_smooth, co2Mean, co2Std);
-        bool luxAnomaly = isAnomaly(lux_smooth, luxMean, luxStd);
+          // Detect anomalies
+          bool tempAnomaly = isAnomaly(temperature, tempMean, tempStd);
+          bool humAnomaly = isAnomaly(humidity, humMean, humStd);
+          bool co2Anomaly = isAnomaly(mq135_smooth, co2Mean, co2Std);
+          bool luxAnomaly = isAnomaly(lux_smooth, luxMean, luxStd);
 
-        // Print alert ONLY when anomaly status changes from false to true
-        if (tempAnomaly && !prevTempAnomaly) {
-          Serial.println("⚠️ Temperature anomaly detected!");
-        }
-        if (humAnomaly && !prevHumAnomaly) {
-          Serial.println("⚠️ Humidity anomaly detected!");
-        }
-        if (co2Anomaly && !prevCO2Anomaly) {
-          Serial.println("⚠️ CO2 anomaly detected!");
-        }
-        if (luxAnomaly && !prevLuxAnomaly) {
-          Serial.println("⚠️ Light anomaly detected!");
-        }
+          if (tempAnomaly && !prevTempAnomaly) Serial.println("⚠️ Temperature anomaly detected!");
+          if (humAnomaly && !prevHumAnomaly) Serial.println("⚠️ Humidity anomaly detected!");
+          if (co2Anomaly && !prevCO2Anomaly) Serial.println("⚠️ CO2 anomaly detected!");
+          if (luxAnomaly && !prevLuxAnomaly) Serial.println("⚠️ Light anomaly detected!");
 
-        // Update previous states
-        prevTempAnomaly = tempAnomaly;
-        prevHumAnomaly = humAnomaly;
-        prevCO2Anomaly = co2Anomaly;
-        prevLuxAnomaly = luxAnomaly;
+          // Update previous states
+          prevTempAnomaly = tempAnomaly;
+          prevHumAnomaly = humAnomaly;
+          prevCO2Anomaly = co2Anomaly;
+          prevLuxAnomaly = luxAnomaly;
 
+          // Relay actions based on anomaly
+          digitalWrite(RELAY_FAN, tempAnomaly ? HIGH : LOW);
+          
+          // ✅ HUMIDIFIER control: turn on only if humidity is too LOW
+          if (humidity < humMean - 3 * humStd) {
+            digitalWrite(RELAY_HUMID, HIGH);
+            Serial.println("💧 Humidity too low — Humidifier ON");
+          } else {
+            digitalWrite(RELAY_HUMID, LOW);
+          }
+
+          // ✅ CO2 control (solenoid): turn on only if CO2 is too LOW
+          if (mq135_raw < co2Mean - 3 * co2Std) {
+            digitalWrite(RELAY_SOLENOID, HIGH);
+            Serial.println("🫁 CO2 too low — Solenoid ON");
+          } else {
+            digitalWrite(RELAY_SOLENOID, LOW);
+          }
+
+          // ✅ LIGHT control: turn on only if light is too LOW
+          if (lux < luxMean - 3 * luxStd) {
+            digitalWrite(RELAY_LIGHT, HIGH);
+            Serial.println("💡 Light too low — Grow Light ON");
+          } else {
+            digitalWrite(RELAY_LIGHT, LOW);
+          }
 
           Serial.printf("Smoothed Temp: %.1f °C, Smoothed Humidity: %.1f %%\n", temperature, humidity);
 
@@ -208,10 +236,18 @@ void loop() {
             Serial.println("Failed to POST data. Code: " + String(postResponse));
           }
           postHttp.end();
-          
+
+          Serial.println("JSON Data Sent:");
+          Serial.println(jsonStr);
         }
       } else {
         Serial.println("Device is OFF — skipping data send.");
+
+        // Also turn off relays when OFF
+        digitalWrite(RELAY_FAN, LOW);
+        digitalWrite(RELAY_HUMID, LOW);
+        digitalWrite(RELAY_SOLENOID, LOW);
+        digitalWrite(RELAY_LIGHT, LOW);
       }
     } else {
       Serial.println("Failed to GET control state. Code: " + String(httpResponseCode));
@@ -224,4 +260,3 @@ void loop() {
   Serial.println("--------------------------");
   delay(5000);
 }
-
