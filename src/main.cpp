@@ -1,5 +1,4 @@
 #include <Wire.h>
-#include <BH1750.h>
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include <DHT_U.h>
@@ -10,9 +9,10 @@
 #define DHTPIN 4
 #define DHTTYPE DHT11
 #define MQ135_PIN 34
+#define LDR_PIN 35
 
 DHT dht(DHTPIN, DHTTYPE);
-BH1750 lightMeter;
+int ldrRaw = 0;
 
 const char *ssid = "james";
 const char *password = "abcdefghijae";
@@ -34,24 +34,6 @@ float prevTemp = 25.0, prevHum = 50.0, prevCO2 = 300.0, prevLux = 1000.0;
 float T_eul = 25.0, H_eul = 50.0, C_eul = 300.0, L_eul = 1000.0;
 // RK4 Simulation Values
 float T_rk4 = 25.0, H_rk4 = 50.0, C_rk4 = 300.0, L_rk4 = 1000.0;
-
-// Anomaly detection state
-bool prevTempAnomaly = false;
-bool prevHumAnomaly = false;
-bool prevCO2Anomaly = false;
-bool prevLuxAnomaly = false;
-
-// Basic stats for anomaly detection
-float tempMean = 25.0, tempStd = 1.0;
-float humMean = 50.0, humStd = 5.0;
-float co2Mean = 300.0, co2Std = 20.0;
-float luxMean = 1000.0, luxStd = 300.0;
-
-bool isAnomaly(float value, float mean, float std)
-{
-  float z = abs((value - mean) / std);
-  return z > 3.0;
-}
 
 // Differential equations
 float external_factor(float t)
@@ -98,15 +80,7 @@ void setup()
   }
   Serial.println(" Connected");
 
-  Wire.begin();
-  if (lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x23))
-  {
-    Serial.println("BH1750 ready.");
-  }
-  else
-  {
-    Serial.println("BH1750 not detected.");
-  }
+  pinMode(LDR_PIN, INPUT);
 
   dht.begin();
   pinMode(MQ135_PIN, INPUT);
@@ -120,7 +94,8 @@ void loop()
     temperature = dht.readTemperature();
     humidity = dht.readHumidity();
     mq135_raw = analogRead(MQ135_PIN);
-    lux = lightMeter.readLightLevel();
+    ldrRaw = analogRead(LDR_PIN); // 0–4095
+    lux = map(ldrRaw, 0, 4095, 0, 10000);
 
     HTTPClient http;
     http.begin(serverControlUrl);
@@ -153,36 +128,6 @@ void loop()
           prevCO2 = mq135_smooth;
           prevLux = lux_smooth;
 
-          // Detect anomalies
-          bool tempAnomaly = isAnomaly(temperature, tempMean, tempStd);
-          bool humAnomaly = isAnomaly(humidity, humMean, humStd);
-          bool co2Anomaly = isAnomaly(mq135_smooth, co2Mean, co2Std);
-          bool luxAnomaly = isAnomaly(lux_smooth, luxMean, luxStd);
-
-          // Print alert ONLY when anomaly status changes from false to true
-          if (tempAnomaly && !prevTempAnomaly)
-          {
-            Serial.println("⚠️ Temperature anomaly detected!");
-          }
-          if (humAnomaly && !prevHumAnomaly)
-          {
-            Serial.println("⚠️ Humidity anomaly detected!");
-          }
-          if (co2Anomaly && !prevCO2Anomaly)
-          {
-            Serial.println("⚠️ CO2 anomaly detected!");
-          }
-          if (luxAnomaly && !prevLuxAnomaly)
-          {
-            Serial.println("⚠️ Light anomaly detected!");
-          }
-
-          // Update previous states
-          prevTempAnomaly = tempAnomaly;
-          prevHumAnomaly = humAnomaly;
-          prevCO2Anomaly = co2Anomaly;
-          prevLuxAnomaly = luxAnomaly;
-
           Serial.printf("Smoothed Temp: %.1f °C, Smoothed Humidity: %.1f %%\n", temperature, humidity);
 
           // Euler Simulation
@@ -206,10 +151,10 @@ void loop()
           dataDoc["co2"] = mq135_raw;
           dataDoc["light"] = lux;
 
-          dataDoc["T_sim"] = T_eul;
-          dataDoc["H_sim"] = H_eul;
-          dataDoc["C_sim"] = C_eul;
-          dataDoc["L_sim"] = L_eul;
+          dataDoc["T_eul"] = T_eul;
+          dataDoc["H_eul"] = H_eul;
+          dataDoc["C_eul"] = C_eul;
+          dataDoc["L_eul"] = L_eul;
 
           dataDoc["T_rk4"] = T_rk4;
           dataDoc["H_rk4"] = H_rk4;
