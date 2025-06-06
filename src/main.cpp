@@ -12,10 +12,10 @@
 #define LDR_PIN 35
 
 // Relay control pins
-#define RELAY_FAN       14
-#define RELAY_HUMID     26
-#define RELAY_SOLENOID  25
-#define RELAY_LIGHT     33
+#define RELAY_FAN 4
+#define RELAY_MIST 26
+#define RELAY_SOLENOID 25
+#define RELAY_LIGHT 22
 
 DHT dht(DHTPIN, DHTTYPE);
 int ldrRaw = 0;
@@ -30,7 +30,7 @@ const char *serverControlUrl = "http://192.168.143.199:8081/api/control";
 const float ambient = 25.0;
 const float k = 0.1;
 const float dt = 1.0; // time step in seconds
-float simTime = 0.0; // simulation time tracker
+float simTime = 0.0;  // simulation time tracker
 
 // Sensor and smoothed values
 float temperature = 0.0, humidity = 0.0, mq135_raw = 0.0, lux = 0.0;
@@ -53,7 +53,8 @@ float humMean = 50.0, humStd = 5.0;
 float co2Mean = 300.0, co2Std = 20.0;
 float luxMean = 1000.0, luxStd = 300.0;
 
-bool isAnomaly(float value, float mean, float std) {
+bool isAnomaly(float value, float mean, float std)
+{
   float z = abs((value - mean) / std);
   return z > 3.0;
 }
@@ -109,14 +110,14 @@ void setup()
 
   // Relay pin setup
   pinMode(RELAY_FAN, OUTPUT);
-  pinMode(RELAY_HUMID, OUTPUT);
+  pinMode(RELAY_MIST, OUTPUT);
   pinMode(RELAY_SOLENOID, OUTPUT);
   pinMode(RELAY_LIGHT, OUTPUT);
 
-  digitalWrite(RELAY_FAN, LOW);
-  digitalWrite(RELAY_HUMID, LOW);
-  digitalWrite(RELAY_SOLENOID, LOW);
-  digitalWrite(RELAY_LIGHT, LOW);
+  // digitalWrite(RELAY_FAN, LOW);
+  // digitalWrite(RELAY_MIST, LOW);
+  // digitalWrite(RELAY_SOLENOID, LOW);
+  // digitalWrite(RELAY_LIGHT, LOW);
 }
 
 void loop()
@@ -167,10 +168,14 @@ void loop()
           bool co2Anomaly = isAnomaly(mq135_smooth, co2Mean, co2Std);
           bool luxAnomaly = isAnomaly(lux_smooth, luxMean, luxStd);
 
-          if (tempAnomaly && !prevTempAnomaly) Serial.println("⚠️ Temperature anomaly detected!");
-          if (humAnomaly && !prevHumAnomaly) Serial.println("⚠️ Humidity anomaly detected!");
-          if (co2Anomaly && !prevCO2Anomaly) Serial.println("⚠️ CO2 anomaly detected!");
-          if (luxAnomaly && !prevLuxAnomaly) Serial.println("⚠️ Light anomaly detected!");
+          if (tempAnomaly && !prevTempAnomaly)
+            Serial.println("⚠️ Temperature anomaly detected!");
+          if (humAnomaly && !prevHumAnomaly)
+            Serial.println("⚠️ Humidity anomaly detected!");
+          if (co2Anomaly && !prevCO2Anomaly)
+            Serial.println("⚠️ CO2 anomaly detected!");
+          if (luxAnomaly && !prevLuxAnomaly)
+            Serial.println("⚠️ Light anomaly detected!");
 
           // Update previous states
           prevTempAnomaly = tempAnomaly;
@@ -178,31 +183,38 @@ void loop()
           prevCO2Anomaly = co2Anomaly;
           prevLuxAnomaly = luxAnomaly;
 
-          // Relay actions based on anomaly
-          digitalWrite(RELAY_FAN, tempAnomaly ? HIGH : LOW);
-          
-          // ✅ HUMIDIFIER control: turn on only if humidity is too LOW
-          if (humidity < humMean - 3 * humStd) {
-            digitalWrite(RELAY_HUMID, HIGH);
+          digitalWrite(RELAY_FAN, LOW); // ON (because active LOW)
+
+          if (humidity < 50)
+          {
+            digitalWrite(RELAY_MIST, LOW);
             Serial.println("💧 Humidity too low — Humidifier ON");
-          } else {
-            digitalWrite(RELAY_HUMID, LOW);
+          }
+          else
+          {
+            digitalWrite(RELAY_MIST, HIGH);
           }
 
           // ✅ CO2 control (solenoid): turn on only if CO2 is too LOW
-          if (mq135_raw < co2Mean - 3 * co2Std) {
-            digitalWrite(RELAY_SOLENOID, HIGH);
-            Serial.println("🫁 CO2 too low — Solenoid ON");
-          } else {
+          if (mq135_raw < 1000)
+          {
             digitalWrite(RELAY_SOLENOID, LOW);
+            Serial.println("🫁 CO2 too low — Solenoid ON");
+          }
+          else
+          {
+            digitalWrite(RELAY_SOLENOID, HIGH);
           }
 
           // ✅ LIGHT control: turn on only if light is too LOW
-          if (lux < luxMean - 3 * luxStd) {
-            digitalWrite(RELAY_LIGHT, HIGH);
-            Serial.println("💡 Light too low — Grow Light ON");
-          } else {
+          if (lux < 2000)
+          {
             digitalWrite(RELAY_LIGHT, LOW);
+            Serial.println("💡 Light too low — Grow Light ON");
+          }
+          else
+          {
+            digitalWrite(RELAY_LIGHT, HIGH);
           }
 
           Serial.printf("Smoothed Temp: %.1f °C, Smoothed Humidity: %.1f %%\n", temperature, humidity);
@@ -261,10 +273,10 @@ void loop()
         Serial.println("Device is OFF — skipping data send.");
 
         // Also turn off relays when OFF
-        digitalWrite(RELAY_FAN, LOW);
-        digitalWrite(RELAY_HUMID, LOW);
-        digitalWrite(RELAY_SOLENOID, LOW);
-        digitalWrite(RELAY_LIGHT, LOW);
+        digitalWrite(RELAY_FAN, HIGH);
+        digitalWrite(RELAY_MIST, HIGH);
+        digitalWrite(RELAY_SOLENOID, HIGH);
+        digitalWrite(RELAY_LIGHT, HIGH);
       }
     }
     else
