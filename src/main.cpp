@@ -39,7 +39,6 @@ void setup()
   dht.begin();
   pinMode(MQ135_PIN, INPUT);
 
-  // Relay pin setup
   pinMode(RELAY_FAN, OUTPUT);
   pinMode(RELAY_MIST, OUTPUT);
   pinMode(RELAY_SOLENOID, OUTPUT);
@@ -55,7 +54,6 @@ void loop()
 {
   if (WiFi.status() == WL_CONNECTED)
   {
-    // Read sensor values
     temperature = dht.readTemperature();
     humidity = dht.readHumidity();
     mq135_raw = analogRead(MQ135_PIN);
