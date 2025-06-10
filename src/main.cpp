@@ -5,6 +5,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <math.h>
 #include "secrets.h"
 
 #define DHTPIN 4
@@ -18,9 +19,29 @@
 #define RELAY_LIGHT 32
 
 DHT dht(DHTPIN, DHTTYPE);
-int ldrRaw = 0;
 
-float temperature = 0.0, humidity = 0.0, mq135_raw = 0.0, lux = 0.0;
+float temperature = 0.0, humidity = 0.0, mq135_raw = 0.0, ldr_raw = 0.0;
+
+
+const float RL = 10000;
+const float CLEAN_AIR_FACTOR = 3.6;
+const float R0 = 19972.22; // Calibrated MQ135 resistance in clean air
+
+float calculatePPM(int adcValue, float R0)
+{
+  float Vcc = 3.3;
+  float VRL = (adcValue / 4095.0) * Vcc;
+  float Rs = RL * ((Vcc - VRL) / VRL);
+
+  float ratio = Rs / R0;
+
+  // Coefficients for CO₂ curve
+  float a = -2.769;
+  float b = 2.544;
+
+  float ppm = pow(10, (a * log10(ratio) + b));
+  return ppm;
+}
 
 void setup()
 {
@@ -56,10 +77,12 @@ void loop()
   {
     temperature = dht.readTemperature();
     humidity = dht.readHumidity();
-    mq135_raw = analogRead(MQ135_PIN);
 
-    ldrRaw = analogRead(LDR_PIN); // 0–4095
-    lux = map(ldrRaw, 0, 4095, 0, 10000);
+    mq135_raw = analogRead(MQ135_PIN);
+    float co2 = calculatePPM(mq135_raw, R0);
+
+    ldr_raw = analogRead(LDR_PIN);
+    float light = map(ldr_raw, 0, 4095, 0, 10000);
 
     HTTPClient http;
     http.begin(SERVER_CONTROL_URL);
@@ -95,15 +118,15 @@ void loop()
 
           if (humidity < 50)
           {
-             digitalWrite(RELAY_MIST, LOW);
-             Serial.println("💧 Humidity too low — Humidifier ON");
+            digitalWrite(RELAY_MIST, LOW);
+            Serial.println("💧 Humidity too low — Humidifier ON");
           }
           else
           {
             digitalWrite(RELAY_MIST, HIGH);
           }
 
-          if (mq135_raw < 1000)
+          if (co2 < 1000)
           {
             digitalWrite(RELAY_SOLENOID, LOW);
             Serial.println("🫁 CO2 too low — Solenoid ON");
@@ -113,7 +136,7 @@ void loop()
             digitalWrite(RELAY_SOLENOID, HIGH);
           }
 
-          if (lux < 2000)
+          if (light < 2000)
           {
             digitalWrite(RELAY_LIGHT, LOW);
             Serial.println("💡 Light too low — Grow Light ON");
@@ -127,8 +150,8 @@ void loop()
           StaticJsonDocument<400> dataDoc;
           dataDoc["temperature"] = temperature;
           dataDoc["humidity"] = humidity;
-          dataDoc["co2"] = mq135_raw;
-          dataDoc["light"] = lux;
+          dataDoc["co2"] = co2;
+          dataDoc["light"] = light;
 
           String jsonStr;
           serializeJson(dataDoc, jsonStr);
